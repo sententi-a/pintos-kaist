@@ -92,6 +92,9 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
+	/*Newly added in Project 1*/
+	int64_t wakeup_tick; 				/*Tick till wake up. */
+
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -142,5 +145,12 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+
+/******Newly added function in project 1*******/
+void thread_sleep(int64_t ticks);				/*Turns thread state from THREAD_RUNNING into THREAD_BLOCKED*/
+void thread_awake(int64_t ticks);				/*Awakes a thread in sleep_list*/
+void update_next_tick_to_awake(int64_t ticks); 	/*Saves a thread that has a minimum tick*/
+int64_t get_next_tick_to_awake(void); 			/*Returns next_tick_to_awake(global variable in thread.c)*/ 
 
 #endif /* threads/thread.h */

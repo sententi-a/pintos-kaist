@@ -15,6 +15,8 @@
 #include "userprog/process.h"
 #endif
 
+/* Returns smaller value. */
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -27,6 +29,15 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+/* List of processes in THREAD_BLOCKED state, that is, processes
+   that are waiting for an event to trigger.
+   #####(Newly added in Project 1)##### */
+static struct list sleep_list;
+
+/* Minimum wakeup_tick value of threads which are blocked in sleep_list
+   #####(Newly added in Project 1)##### */
+int64_t next_tick_to_awake;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -105,10 +116,13 @@ thread_init (void) {
 	};
 	lgdt (&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the global thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	/*#####Newly added in project 1#####*/
+	list_init (&sleep_list);
+	next_tick_to_awake = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -161,6 +175,7 @@ thread_print_stats (void) {
 			idle_ticks, kernel_ticks, user_ticks);
 }
 
+/*#####Modified in Project 1 (Priority scheduling)#####*/
 /* Creates a new kernel thread named NAME with the given initial
    PRIORITY, which executes FUNCTION passing AUX as the argument,
    and adds it to the ready queue.  Returns the thread identifier
@@ -244,6 +259,66 @@ thread_unblock (struct thread *t) {
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
+
+/*****Newly added in Project 1 (Alarm Clock)******/
+/*Sleeps a thread. Change the running thread state to BLOCKED and add it into the sleep_list*/
+void thread_sleep(int64_t ticks) {
+	/*If the current thread is not idle thread, change the state of the caller thread to BLOCKED, 
+	  store the local tick to wake up, update the global tick if necessary, and call schedule() */
+	
+	/*When you manipulate thread list, disable interrupt!*/
+	struct thread *curr = thread_current ();
+	enum intr_level old_level; 		// for disabling interrupt
+
+	old_level = intr_disable (); 	// disables interrupt
+	
+	ASSERT (curr != idle_thread); 
+
+	curr->wakeup_tick = ticks;
+	list_push_back (&sleep_list, &curr->elem);
+	update_next_tick_to_awake (ticks);
+	thread_block ();
+	//do_schedule(THREAD_BLOCKED);
+	
+	intr_set_level (old_level); // enable interrupt
+}
+
+/*****Newly added in Project 1 (Alarm Clock)*****/
+/*Awakes a thread. Find threads to awake walking through the sleep_list and unblock it.*/
+void thread_awake(int64_t ticks) {
+	struct list_elem *target; //= list_begin (&sleep_list);
+	
+	// while (target != list_end (&sleep_list)) {
+	for (target = list_begin (&sleep_list); target != list_end (&sleep_list); ) {
+		struct thread *thread_pt = list_entry(target, struct thread, elem);  /*list_entry() : Converts pointer to list element LIST_ELEM into a pointer to the structure that LIST_ELEM is embedded inside.*/
+		/*if tick is greater than / or same as wakeup_tick, 
+		  removes a target thread out of sleep_list 
+		  and changes its state to THREAD_READY*/
+		if (thread_pt->wakeup_tick <= ticks) {
+			target = list_remove (target); 		/*list_remove(): Removes element out of list and returns next element pointer*/
+			thread_unblock (thread_pt);		
+		}
+		/*If not, just do nothing and set pointer to the next sleeping thread.
+		  Also, there could be a change in a sleep_list(through the process above), update next_tick_to_awake*/
+		else {
+			update_next_tick_to_awake (thread_pt->wakeup_tick);
+			target = list_next (target);
+		}
+	}
+}
+
+/*****Newly added in Project 1 (Alarm Clock)*****/
+/*Saves a minimum tick into the next_tick_to_awake variable*/
+void update_next_tick_to_awake(int64_t ticks) {
+	next_tick_to_awake = MIN(next_tick_to_awake, ticks);
+}	
+/*****Newly added in Project 1 (Alarm Clock)*****/
+/*Returns next_tick_to_awake value*/
+int64_t get_next_tick_to_awake(void) {
+	/*최소 tick 값을 반환*/
+	return next_tick_to_awake;
+}
+/*************************************************/	
 
 /* Returns the name of the running thread. */
 const char *
