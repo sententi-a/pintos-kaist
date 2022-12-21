@@ -152,5 +152,7 @@ void thread_sleep(int64_t ticks);				/*Turns thread state from THREAD_RUNNING in
 void thread_awake(int64_t ticks);				/*Awakes a thread in sleep_list*/
 void update_next_tick_to_awake(int64_t ticks); 	/*Saves a thread that has a minimum tick*/
 int64_t get_next_tick_to_awake(void); 			/*Returns next_tick_to_awake(global variable in thread.c)*/ 
-
+/*Project 1 (Priority Scheduling)*/
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+void test_max_priority();
 #endif /* threads/thread.h */

@@ -17,6 +17,7 @@
 
 /* Returns smaller value. */
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -122,7 +123,7 @@ thread_init (void) {
 	list_init (&destruction_req);
 	/*#####Newly added in project 1#####*/
 	list_init (&sleep_list);
-	next_tick_to_awake = INT64_MAX;
+	//next_tick_to_awake = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -222,7 +223,25 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	/*#####Newly added in Project 1 (Priority Scheduling)#####*/
+	/*Compare the priorities of the currently running thread and the newly inserted one.
+	  Yield the CPU if the newly arriving thread has higher priority */
+	int curr_priority = thread_get_priority ();
+
+	if (priority > curr_priority) {
+		thread_yield();
+
 	return tid;
+	}
+}
+
+/*****Newly added in Project 1 (Priority Scheduling)******/
+/* Determines whether b's priority is smaller than a's priority*/
+bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
+	/*Is new greater than old?*/
+	struct thread *new = list_entry(a, struct thread, elem);
+	struct thread *old = list_entry(b, struct thread, elem);
+	return new->priority > old->priority ? 1 : 0;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -255,11 +274,14 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	//list_push_back (&ready_list, &t->elem);
+	/*#####Newly added in Project 1 (Priority Scheduling)#####*/
+	list_insert_ordered (&ready_list, &t->elem, cmp_priority, NULL); /*insert thread into the ready_list in priority order*/
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
 
+/**************************************************/
 /*****Newly added in Project 1 (Alarm Clock)******/
 /*Sleeps a thread. Change the running thread state to BLOCKED and add it into the sleep_list*/
 void thread_sleep(int64_t ticks) {
@@ -286,6 +308,7 @@ void thread_sleep(int64_t ticks) {
 /*****Newly added in Project 1 (Alarm Clock)*****/
 /*Awakes a thread. Find threads to awake walking through the sleep_list and unblock it.*/
 void thread_awake(int64_t ticks) {
+	next_tick_to_awake = INT64_MAX;
 	struct list_elem *target; //= list_begin (&sleep_list);
 	
 	// while (target != list_end (&sleep_list)) {
@@ -378,15 +401,36 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		//list_push_back (&ready_list, &curr->elem);
+		/*****Newly added in Project 1 (Alarm Clock)*****/
+		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
 
+/*#####Modified in Project 1 (Priority Scheduling)#####*/
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+	/* Set priority of the current thread. 
+	   Compare current thread's priority and the highest priority value in ready_list 
+	   Reorder the ready_list */
 	thread_current ()->priority = new_priority;
+	test_max_priority();	
+}
+
+/*Compare current thread's priority and the highest priority value in ready_list 
+  Call thread_yield if latter is greater */
+void test_max_priority() {
+	int curr_priority = thread_get_priority();
+
+	if (!list_empty (&ready_list)) {
+		struct list_elem *first_elem_in_ready = list_front (&ready_list);
+		struct thread *highest_priority = list_entry (first_elem_in_ready, struct thread, elem)->priority;
+
+		if (curr_priority < highest_priority) 
+			thread_yield ();
+	}
 }
 
 /* Returns the current thread's priority. */
@@ -603,11 +647,11 @@ thread_launch (struct thread *th) {
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
-	ASSERT (thread_current()->status == THREAD_RUNNING);
+	ASSERT (thread_current ()->status == THREAD_RUNNING);
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
-		palloc_free_page(victim);
+		palloc_free_page (victim);
 	}
 	thread_current ()->status = status;
 	schedule ();

@@ -49,6 +49,7 @@ sema_init (struct semaphore *sema, unsigned value) {
 	list_init (&sema->waiters);
 }
 
+/*#####Modified in Project 1 (Priority Scheduling) #####*/
 /* Down or "P" operation on a semaphore.  Waits for SEMA's value
    to become positive and then atomically decrements it.
 
@@ -65,8 +66,10 @@ sema_down (struct semaphore *sema) {
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
+	/* If the sema's value is 0, insert current thread into that sema's waiters list & make it blocked*/
 	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		list_insert_ordered (&sema->waiters, &thread_current ()-> elem, cmp_priority, NULL);
+		//list_push_back (&sema->waiters, &thread_current ()->elem); /*FIFO*/
 		thread_block ();
 	}
 	sema->value--;
@@ -98,6 +101,7 @@ sema_try_down (struct semaphore *sema) {
 	return success;
 }
 
+/*#####Modified in Project 1 (Priority Scheduling) #####*/
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
    and wakes up one thread of those waiting for SEMA, if any.
 
@@ -109,10 +113,17 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
+	/* Release semaphore sema */
+	if (!list_empty (&sema->waiters)) {
+		/*****Newly added in Project 1 (Priority scheduling)*****/
+		list_sort(&sema->waiters, cmp_priority, NULL);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
+	}
 	sema->value++;
+	/*****Newly added in Project 1 (Priority scheduling)*****/
+	/* priority preemption */
+	test_max_priority();
 	intr_set_level (old_level);
 }
 
@@ -252,6 +263,7 @@ cond_init (struct condition *cond) {
 	list_init (&cond->waiters);
 }
 
+/*#####Modified in Project 1 (Priority Scheduling) #####*/
 /* Atomically releases LOCK and waits for COND to be signaled by
    some other piece of code.  After COND is signaled, LOCK is
    reacquired before returning.  LOCK must be held before calling
@@ -282,12 +294,14 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	list_insert_ordered(&cond->waiters, &waiter.elem, cmp_sema_priority, NULL);
+	//list_push_back (&cond->waiters, &waiter.elem);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
 }
 
+/*#####Modified in Project 1 (Priority Scheduling) #####*/
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
    LOCK must be held before calling this function.
@@ -302,9 +316,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
+	if (!list_empty (&cond->waiters)) {
+		list_sort(&cond->waiters, cmp_sema_priority, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -320,4 +336,22 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
+}
+
+/*****Newly added in Project 1 (Priority scheduling)*****/
+/* Compare semaphore's priority.
+   If first semaphore's priority is greater, it returns 1 or returns 0 */
+bool cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
+	/*Semaphore's priority : the highest priority of threads that is waiting for the semaphore */
+	/*a : &sema->waiters*/
+	struct semaphore_elem *sema_elem_a = list_entry(a, struct semaphore_elem, elem); 
+	struct semaphore_elem *sema_elem_b = list_entry(b, struct semaphore_elem, elem);
+
+	struct list_elem *list_elem_a = list_begin(&(sema_elem_a->semaphore.waiters));
+	struct list_elem *list_elem_b = list_begin(&(sema_elem_b->semaphore.waiters));
+
+	struct thread *thread_a = list_entry(list_elem_a, struct thread, elem);
+	struct thread *thread_b = list_entry(list_elem_b, struct thread, elem);
+
+	return thread_a->priority > thread_b->priority ? 1 : 0;
 }
