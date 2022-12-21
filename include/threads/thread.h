@@ -87,13 +87,21 @@ typedef int tid_t;
  * blocked state is on a semaphore wait list. */
 struct thread {
 	/* Owned by thread.c. */
-	tid_t tid;                          /* Thread identifier. */
-	enum thread_status status;          /* Thread state. */
-	char name[16];                      /* Name (for debugging purposes). */
-	int priority;                       /* Priority. */
-
+	tid_t tid;                          /* 스레드의 식별자 */
+	enum thread_status status;          /* 스레드 상태(3가지 상태가 있다) */
+	char name[16];                      /* 스레드의 이름이나 축약어를 기록 */
+	int priority;                       /* 스레드 우선순위 */
 	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
+	struct list_elem elem;              /* 스레드를 이중연결 리스트에 넣기 위해 쓰인다. */
+
+	// Alarm Clock -------------------------------------------------------------------
+	int64_t wakeup_tick;
+	// Priority Donation -------------------------------------------------------------
+	int init_priority; // 초기 우선순위 값을 저장할 필드
+	struct lock *wait_on_lock; // lock 자료구조의 주소를 저장할 필드
+	struct list donations; // multiple donation을 위한 리스트
+	struct list_elem donation_elem; // 위의 리스트를 위한 elem
+	// Priority Donation -------------------------------------------------------------
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -106,7 +114,7 @@ struct thread {
 
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
-	unsigned magic;                     /* Detects stack overflow. */
+	unsigned magic;                     /* 스택 오버플로우를 탐지하기 위해 쓰인다. */
 };
 
 /* If false (default), use round-robin scheduler.
@@ -142,5 +150,26 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+// alarm clock -------------------------------------------------------------------
+// 함수 선언
+void thread_sleep(int64_t ticks); // 실행 중인 스레드를 슬립으로 재운다.
+void thread_awake(int64_t ticks); // 슬립 큐에서 꺠워야 할 스레드를 깨운다.
+void update_next_tick_to_awake(int64_t ticks); // 최소 틱을 가진 스레드를 저장한다.
+int64_t get_next_tick_to_awake(void); // next_tick_to_awake 반환
+// alarm clock -------------------------------------------------------------------
+
+// Priority Scheduling -----------------------------------------------------------
+// 함수 선언
+void test_max_priority(void);
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+// Priority Scheduling -----------------------------------------------------------
+
+// Priority Donation -------------------------------------------------------------
+//함수 선언
+void donation_priority(void);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(void);
+// Priority Donation -------------------------------------------------------------
 
 #endif /* threads/thread.h */

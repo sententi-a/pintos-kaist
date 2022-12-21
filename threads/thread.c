@@ -92,6 +92,17 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
    It is not safe to call thread_current() until this function
    finishes. */
+
+// alarm clock -------------------------------------------------------------------
+
+#define MIN(a,b) (((a) < (b)) ? (a) : (b)) // 이따 min값을 얻기 위해 설정
+
+static struct list sleep_list; // 스레드 상태가 block인 스레드를 관리하기 위한 리스트 자료구조 추가
+
+static int64_t next_tick_to_awake; // sleep 스레드 리스트에서 대기중인 스레드들의 tick값중 최소값을 저장
+
+// alarm clock -------------------------------------------------------------------
+
 void
 thread_init (void) {
 	ASSERT (intr_get_level () == INTR_OFF);
@@ -110,6 +121,11 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
+	// alarm clock -------------------------------------------------------------------
+	list_init(&sleep_list); // sleep리스트를 초기화
+	// next_tick_to_awake = INT64_MAX; // 최소값을 찾을때 비교 대상이므로 초기값을 max값으로 초기화
+	// alarm clock -------------------------------------------------------------------
+	
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -207,6 +223,17 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	// Priority Scheduling -----------------------------------------------------------
+
+	// curr 변수에 현재 실행 중인 스레드를 가져온다.
+	// cmp_priority함수를 통해 t,curr를 비교해서 curr이 더 크다면 yield함수를 통해 cpu양보
+	struct thread *curr = thread_current();
+	if (cmp_priority(&t->elem, &curr->elem, NULL)){
+		thread_yield();
+	}
+
+	// Priority Scheduling -----------------------------------------------------------
+
 	return tid;
 }
 
@@ -240,7 +267,17 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+
+	// list_push_back (&ready_list, &t->elem); : ready리스트 맨뒤에 추가하는 코드
+
+	// Priority Scheduling -----------------------------------------------------------
+
+	// ready리스트에 우선순위 순으로 정렬되어 삽입하기 위해
+	// list_insert_ordered함수 안에서 cmp~~함수를 사용하기에 인자로 넣어준다.
+	list_insert_ordered(&ready_list, &t->elem, &cmp_priority, NULL);
+
+	// Priority Scheduling -----------------------------------------------------------
+
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -303,15 +340,28 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
-	do_schedule (THREAD_READY);
-	intr_set_level (old_level);
+		// list_push_back (&ready_list, &curr->elem); : 이 코드는 ready리스트 맨뒤에 추가하는 함수다.
+		// Priority Scheduling -----------------------------------------------------------
+		list_insert_ordered(&ready_list, &curr->elem, &cmp_priority, NULL);
+		// Priority Scheduling -----------------------------------------------------------
+
+	do_schedule (THREAD_READY); // context switch 작업수행 - 현재 수행되는 스레드 ready로 전환
+	intr_set_level (old_level); // 인자로 전달된 인터럽트 상태로 인터럽트 설정하고 이전 인터럽트 상태 반환
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+	// 현재 스레드의 우선순위를 바꾸어준다.
 	thread_current ()->priority = new_priority;
+
+	// Priority Donation -------------------------------------------------------------
+	refresh_priority(); // test_max_priority함수를 호출전에 우선순위를 갱신하기위해 호출
+	// Priority Donation -------------------------------------------------------------
+	
+	// Priority Scheduling -----------------------------------------------------------
+	test_max_priority();
+	// Priority Scheduling -----------------------------------------------------------
 }
 
 /* Returns the current thread's priority. */
@@ -409,6 +459,13 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	// Priority Donation -------------------------------------------------------------
+	//priority donation 관련 자료구조을 초기화해준다.
+	t->init_priority = priority;
+	t->wait_on_lock = NULL;
+	list_init(&t->donations);
+	// Priority Donation -------------------------------------------------------------
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -556,13 +613,13 @@ schedule (void) {
 	/* Activate the new address space. */
 	process_activate (next);
 #endif
-
+	
 	if (curr != next) {
 		/* If the thread we switched from is dying, destroy its struct
 		   thread. This must happen late so that thread_exit() doesn't
 		   pull out the rug under itself.
 		   We just queuing the page free reqeust here because the page is
-		   currently used bye the stack.
+		   currently used by the stack.
 		   The real destruction logic will be called at the beginning of the
 		   schedule(). */
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
@@ -571,7 +628,7 @@ schedule (void) {
 		}
 
 		/* Before switching the thread, we first save the information
-		 * of current running. */
+			* of current running. */
 		thread_launch (next);
 	}
 }
@@ -588,3 +645,102 @@ allocate_tid (void) {
 
 	return tid;
 }
+
+// alarm clock -------------------------------------------------------------------
+void thread_sleep(int64_t ticks){
+	// thread_yield함수를 뼈대로 사용한다.
+
+	struct thread *curr = thread_current();
+	enum intr_level old_level;
+	ASSERT(!intr_context()); 
+	old_level = intr_disable(); // 변수에 이전 인터럽트 상태를 저장
+
+	curr->wakeup_tick = ticks;
+
+	if (curr != idle_thread){
+		list_push_back(&sleep_list, &thread_current()->elem);
+	}
+
+	update_next_tick_to_awake(ticks);
+	do_schedule(THREAD_BLOCKED);
+	intr_set_level(old_level);
+}
+// alarm clock -------------------------------------------------------------------
+
+// alarm clock -------------------------------------------------------------------
+
+void thread_awake(int64_t ticks){
+
+	next_tick_to_awake = INT64_MAX; 
+	struct list_elem *e = list_begin(&sleep_list); // list_begin을 통해 sleep리스트의 첫번째 elem을 불러온다.
+	struct thread *t;
+
+	// sleep_list의 스레드를 모두 순회하면서 wakeup_tick이 ticks보다 작으면 깨운다.
+	for (e; e != list_end(&sleep_list);){
+		// printf("next_tick=%ld\n",next_tick_to_awake);
+		
+		t = list_entry(e, struct thread, elem); // sleep list에 들어있는 엔트리 중에서 계속 돈다.
+		if (t->wakeup_tick <= ticks){
+			e = list_remove(&t->elem);
+			thread_unblock(t);
+		}else{
+			update_next_tick_to_awake(t->wakeup_tick);
+			e = list_next(e);
+		}
+	}
+	// printf("%ld\n",ticks);
+	// printf("%d\n",list_empty(&sleep_list));
+}
+
+// alarm clock -------------------------------------------------------------------
+
+// alarm clock -------------------------------------------------------------------
+
+void update_next_tick_to_awake(int64_t ticks){
+	next_tick_to_awake = MIN(next_tick_to_awake, ticks);
+}
+int64_t get_next_tick_to_awake(void){
+	return next_tick_to_awake;
+}
+
+// alarm clock -------------------------------------------------------------------
+
+// Priority Scheduling -----------------------------------------------------------
+// cmp_priority함수 : 인자 1과 2의 우선순위 비교 함수
+
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+
+	struct thread *t_a;
+	struct thread *t_b;
+	// list_entry(x,y,z) : x의 포인터에서 z을 이용하여 x가 속한 구조체의 시작 포인터를 y형태로 반환
+	// (쉽게 보면 x가 속한 구조체를 y의 형태로 반환)
+	t_a = list_entry(a, struct thread, elem); // a가 속한 스레드의 구조체를 가져온다.
+	t_b = list_entry(b, struct thread, elem); // b가 속한 스레드의 구조체를 가져온다
+
+	if ((t_a->priority) > (t_b->priority)){
+		return true; // a의 우선순위가 더 크면 1 리턴
+	}else{
+		return false; // b의 우선순귀가 더 크면 0 리턴
+	}
+}
+
+// Priority Scheduling -----------------------------------------------------------
+
+// Priority Scheduling -----------------------------------------------------------
+// ready 리스트의 맨앞의 스레드와 현재 스레드의 우선순위를 비교
+// 현재 스레드가 더 작다면 yield호출
+void test_max_priority(void){
+	// ready리스트가 비었다면 바로 리턴
+	if (list_empty(&ready_list)){
+		return;
+	}
+
+	int run_priority = thread_current()->priority;
+	struct list_elem *e = list_begin(&ready_list);
+	struct thread *t = list_entry(e, struct thread, elem);
+
+	if (t->priority > run_priority){
+		thread_yield();
+	}
+}
+// Priority Scheduling -----------------------------------------------------------

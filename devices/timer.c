@@ -90,11 +90,17 @@ timer_elapsed (int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
+	int64_t start = timer_ticks (); // start에 시작 시 시간(tick)을 대입
 
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	ASSERT (intr_get_level () == INTR_ON); // 인터럽트가 들어왓을 떄에만 실행
+
+	// busy_waiting 이므로 대기 시간에도 cpu자원을 잡아 먹는다.
+	// while (timer_elapsed (start) < ticks) // start로 부터 ticks만큼 시간이 지나기 전까지
+	// 	thread_yield (); // cpu를 양보한다.
+
+	// alarm clock -------------------------------------------------------------------
+	thread_sleep(start + ticks); // thread_sleep을 이용하여 현재 시간 + 주어진 tick이후에 깨어나게 설정
+	// alarm clock -------------------------------------------------------------------
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -125,7 +131,17 @@ timer_print_stats (void) {
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
-	thread_tick ();
+	// printf("%ld\n",ticks);
+	thread_tick (); // 코드 제출시 검사를 위한 함수 신경 쓸 필요 없다.
+
+	// alarm clock -------------------------------------------------------------------
+	// time 인터럽트가 발생할때 현재 tick보다 작은 wakeup_tick이 있다면 깨운다.
+	int64_t next_tick;
+	next_tick = get_next_tick_to_awake();
+	if (ticks >= next_tick){ // 현재 tick이 next_tick보다 같거나 크면 next_tick에 해당하는 스레드를 꺠운다.
+		thread_awake(ticks);
+	}
+	// alarm clock -------------------------------------------------------------------
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
