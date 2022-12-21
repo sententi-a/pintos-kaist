@@ -415,8 +415,12 @@ thread_set_priority (int new_priority) {
 	/* Set priority of the current thread. 
 	   Compare current thread's priority and the highest priority value in ready_list 
 	   Reorder the ready_list */
-	thread_current ()->priority = new_priority;
-	test_max_priority();	
+	thread_current ()->original_priority = new_priority;
+	/*****Newly added in Proejct 1(Priority Scheduling)****/
+	//test_max_priority();	
+	/*****Newly added in Project 1-3 (Priority Donation)*****/
+	refresh_priority ();
+	test_max_priority ();
 }
 
 /*Compare current thread's priority and the highest priority value in ready_list 
@@ -431,6 +435,8 @@ void test_max_priority() {
 		if (curr_priority < highest_priority) 
 			thread_yield ();
 	}
+	// if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_front (&ready_list), struct thread, elem)->priority)
+    //     thread_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -513,7 +519,7 @@ kernel_thread (thread_func *function, void *aux) {
 	thread_exit ();       /* If function() returns, kill the thread. */
 }
 
-
+/*#####Modified in Project 1-3 (Priority Donation) #####*/
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
@@ -528,6 +534,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	/*#####Newly added in Project 1 (Priority Donation)#####*/
+	t->original_priority = priority;
+	list_init(&t->donors);
+	t->lock_for_wait = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

@@ -30,6 +30,11 @@ bool lock_try_acquire (struct lock *);
 void lock_release (struct lock *);
 bool lock_held_by_current_thread (const struct lock *);
 
+/*#####Newly added in Project 1-3 (Priority Donation)#####*/
+void donate_priority (void);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
+
 /* Condition variable. */
 struct condition {
 	struct list waiters;        /* List of waiting threads. */

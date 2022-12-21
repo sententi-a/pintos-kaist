@@ -94,6 +94,12 @@ struct thread {
 
 	/*Newly added in Project 1*/
 	int64_t wakeup_tick; 				/*Tick till wake up. */
+	/* (Priority Donation) */
+	int original_priority;  			/* Original priority */
+	struct lock *lock_for_wait; 			/* Address of which the thread is wating for lock */
+	struct list donors;					/* Priority donors list */
+	struct list_elem donor_elem; 		/* Donors list element */
+
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
