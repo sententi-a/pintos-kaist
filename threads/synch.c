@@ -210,8 +210,8 @@ lock_acquire (struct lock *lock) {
 	if (lock->holder != NULL) {
 		curr->lock_for_wait = lock; /* Saves struct lock pointer which thread will wait for */
 		//list_insert_ordered(&(lock->holder->donors), &curr->donor_elem, cmp_priority, NULL); /* Insert current thread into lock's semaphore's waiters*/
-		//list_push_back(&lock->holder->donors, &curr->donor_elem);
-		list_insert_ordered (&lock->holder->donors, &curr->donor_elem, cmp_priority, NULL);
+		list_push_back(&lock->holder->donors, &curr->donor_elem);
+		//list_insert_ordered (&lock->holder->donors, &curr->donor_elem, cmp_priority, NULL);
 		donate_priority();	/*Priority Donation*/
 	}
 	/*******************************************************/
@@ -288,7 +288,7 @@ void donate_priority (void) {
 	struct thread *waiter = thread_current();
 	int curr_priority = waiter->priority;
 	/*consider nested donation*/
-	int i = 0; 
+	int i = 0;
 	while (i < 9) {
 		i++; 
 		/* If a thread currently looking at is waiting for any lock, 
@@ -327,7 +327,7 @@ void refresh_priority (void) {
 	/* Compare current thread's priority and the highest priority in donnors list
 	   Set current thread's priority to the higher value */
 	if (list_empty(&curr->donors) == false) {
-		list_sort (&curr->donors, cmp_priority, NULL);
+		list_sort (&curr->donors, cmp_donor_priority, NULL);
 		struct thread *high = list_entry(list_front(&curr->donors), struct thread, donor_elem);
 		if (high->priority > curr->priority) {
 			curr->priority = high->priority;
@@ -437,6 +437,13 @@ bool cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, voi
 
 	struct thread *thread_a = list_entry(list_elem_a, struct thread, elem);
 	struct thread *thread_b = list_entry(list_elem_b, struct thread, elem);
+
+	return thread_a->priority > thread_b->priority ? 1 : 0;
+}
+
+bool cmp_donor_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
+	struct thread * thread_a = list_entry(a, struct thread, donor_elem);
+	struct thread * thread_b = list_entry(b, struct thread, donor_elem);
 
 	return thread_a->priority > thread_b->priority ? 1 : 0;
 }

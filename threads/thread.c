@@ -246,7 +246,7 @@ bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *a
 
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
-
+h
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
@@ -425,7 +425,7 @@ thread_set_priority (int new_priority) {
 
 /*Compare current thread's priority and the highest priority value in ready_list 
   Call thread_yield if latter is greater */
-void test_max_priority() {
+void test_max_priority (void) {
 	int curr_priority = thread_get_priority();
 
 	if (!list_empty (&ready_list)) {
