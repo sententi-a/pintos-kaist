@@ -15,6 +15,9 @@
 #include "userprog/process.h"
 #endif
 
+/* Returns smaller value. */
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -27,6 +30,15 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+/* List of processes in THREAD_BLOCKED state, that is, processes
+   that are waiting for an event to trigger.
+   #####(Newly added in Project 1)##### */
+static struct list sleep_list;
+
+/* Minimum wakeup_tick value of threads which are blocked in sleep_list
+   #####(Newly added in Project 1)##### */
+int64_t next_tick_to_awake;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -105,10 +117,13 @@ thread_init (void) {
 	};
 	lgdt (&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the global thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	/*#####Newly added in project 1#####*/
+	list_init (&sleep_list);
+	//next_tick_to_awake = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -161,6 +176,7 @@ thread_print_stats (void) {
 			idle_ticks, kernel_ticks, user_ticks);
 }
 
+/*#####Modified in Project 1 (Priority scheduling)#####*/
 /* Creates a new kernel thread named NAME with the given initial
    PRIORITY, which executes FUNCTION passing AUX as the argument,
    and adds it to the ready queue.  Returns the thread identifier
@@ -207,12 +223,30 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	/*#####Newly added in Project 1 (Priority Scheduling)#####*/
+	/*Compare the priorities of the currently running thread and the newly inserted one.
+	  Yield the CPU if the newly arriving thread has higher priority */
+	int curr_priority = thread_get_priority ();
+
+	if (priority > curr_priority) {
+		thread_yield();
+
 	return tid;
+	}
+}
+
+/*****Newly added in Project 1 (Priority Scheduling)******/
+/* Determines whether b's priority is smaller than a's priority*/
+bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
+	/*Is new greater than old?*/
+	struct thread *new = list_entry(a, struct thread, elem);
+	struct thread *old = list_entry(b, struct thread, elem);
+	return new->priority > old->priority ? 1 : 0;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
-
+h
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
@@ -240,10 +274,74 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	//list_push_back (&ready_list, &t->elem);
+	/*#####Newly added in Project 1 (Priority Scheduling)#####*/
+	list_insert_ordered (&ready_list, &t->elem, cmp_priority, NULL); /*insert thread into the ready_list in priority order*/
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
+
+/**************************************************/
+/*****Newly added in Project 1 (Alarm Clock)******/
+/*Sleeps a thread. Change the running thread state to BLOCKED and add it into the sleep_list*/
+void thread_sleep(int64_t ticks) {
+	/*If the current thread is not idle thread, change the state of the caller thread to BLOCKED, 
+	  store the local tick to wake up, update the global tick if necessary, and call schedule() */
+	
+	/*When you manipulate thread list, disable interrupt!*/
+	struct thread *curr = thread_current ();
+	enum intr_level old_level; 		// for disabling interrupt
+
+	old_level = intr_disable (); 	// disables interrupt
+	
+	ASSERT (curr != idle_thread); 
+
+	curr->wakeup_tick = ticks;
+	list_push_back (&sleep_list, &curr->elem);
+	update_next_tick_to_awake (ticks);
+	thread_block ();
+	//do_schedule(THREAD_BLOCKED);
+	
+	intr_set_level (old_level); // enable interrupt
+}
+
+/*****Newly added in Project 1 (Alarm Clock)*****/
+/*Awakes a thread. Find threads to awake walking through the sleep_list and unblock it.*/
+void thread_awake(int64_t ticks) {
+	next_tick_to_awake = INT64_MAX;
+	struct list_elem *target; //= list_begin (&sleep_list);
+	
+	// while (target != list_end (&sleep_list)) {
+	for (target = list_begin (&sleep_list); target != list_end (&sleep_list); ) {
+		struct thread *thread_pt = list_entry(target, struct thread, elem);  /*list_entry() : Converts pointer to list element LIST_ELEM into a pointer to the structure that LIST_ELEM is embedded inside.*/
+		/*if tick is greater than / or same as wakeup_tick, 
+		  removes a target thread out of sleep_list 
+		  and changes its state to THREAD_READY*/
+		if (thread_pt->wakeup_tick <= ticks) {
+			target = list_remove (target); 		/*list_remove(): Removes element out of list and returns next element pointer*/
+			thread_unblock (thread_pt);		
+		}
+		/*If not, just do nothing and set pointer to the next sleeping thread.
+		  Also, there could be a change in a sleep_list(through the process above), update next_tick_to_awake*/
+		else {
+			update_next_tick_to_awake (thread_pt->wakeup_tick);
+			target = list_next (target);
+		}
+	}
+}
+
+/*****Newly added in Project 1 (Alarm Clock)*****/
+/*Saves a minimum tick into the next_tick_to_awake variable*/
+void update_next_tick_to_awake(int64_t ticks) {
+	next_tick_to_awake = MIN(next_tick_to_awake, ticks);
+}	
+/*****Newly added in Project 1 (Alarm Clock)*****/
+/*Returns next_tick_to_awake value*/
+int64_t get_next_tick_to_awake(void) {
+	/*최소 tick 값을 반환*/
+	return next_tick_to_awake;
+}
+/*************************************************/	
 
 /* Returns the name of the running thread. */
 const char *
@@ -303,15 +401,42 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		//list_push_back (&ready_list, &curr->elem);
+		/*****Newly added in Project 1 (Alarm Clock)*****/
+		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
 
+/*#####Modified in Project 1 (Priority Scheduling)#####*/
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	/* Set priority of the current thread. 
+	   Compare current thread's priority and the highest priority value in ready_list 
+	   Reorder the ready_list */
+	thread_current ()->original_priority = new_priority;
+	/*****Newly added in Proejct 1(Priority Scheduling)****/
+	//test_max_priority();	
+	/*****Newly added in Project 1-3 (Priority Donation)*****/
+	refresh_priority ();
+	test_max_priority ();
+}
+
+/*Compare current thread's priority and the highest priority value in ready_list 
+  Call thread_yield if latter is greater */
+void test_max_priority (void) {
+	int curr_priority = thread_get_priority();
+
+	if (!list_empty (&ready_list)) {
+		struct list_elem *first_elem_in_ready = list_front (&ready_list);
+		struct thread *highest_priority = list_entry (first_elem_in_ready, struct thread, elem)->priority;
+
+		if (curr_priority < highest_priority) 
+			thread_yield ();
+	}
+	// if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_front (&ready_list), struct thread, elem)->priority)
+    //     thread_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -394,7 +519,7 @@ kernel_thread (thread_func *function, void *aux) {
 	thread_exit ();       /* If function() returns, kill the thread. */
 }
 
-
+/*#####Modified in Project 1-3 (Priority Donation) #####*/
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
@@ -409,6 +534,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	/*#####Newly added in Project 1 (Priority Donation)#####*/
+	t->original_priority = priority;
+	list_init(&t->donors);
+	t->lock_for_wait = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -528,11 +657,11 @@ thread_launch (struct thread *th) {
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
-	ASSERT (thread_current()->status == THREAD_RUNNING);
+	ASSERT (thread_current ()->status == THREAD_RUNNING);
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
-		palloc_free_page(victim);
+		palloc_free_page (victim);
 	}
 	thread_current ()->status = status;
 	schedule ();
