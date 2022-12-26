@@ -100,9 +100,13 @@ struct thread {
 	struct list donors;					/* Priority donors list */
 	struct list_elem donor_elem; 		/* Donors list element */
 
-
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+
+	/*#####Newly added in Project 2#####*/
+	/*##### File Manipulation #####*/
+	struct file **fdt;
+	int next_fd;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

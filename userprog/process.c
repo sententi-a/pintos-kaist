@@ -53,7 +53,7 @@ process_create_initd (const char *file_name) {
 	/*#####Newly added in Project 2 #####*/
 	/*##### Argument parsing #####*/
 	char *token, *save_point;
-	token = strtok_r (fn_copy, " ", &save_point);
+	token = strtok_r (file_name, " ", &save_point);
 	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
 	/*############################*/
 
@@ -172,12 +172,6 @@ process_exec (void *f_name) {
 	char *file_name = f_name;
 	bool success;
 
-	/*#####Newly added in Project 2 (Argument Parsing)#####*/
-	/* Copy file_name */
-	// char file_name_cp[128];
-	// memcpy(file_name_cp, file_name, strlen(file_name) + 1);
-	/*#####################################################*/
-
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
@@ -189,13 +183,7 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
-	/*해주는 이유????????????/*/
-	memset(&_if, 0, sizeof(_if));
-
 	/* And then load the binary */
-	/*#####Newly added in Project 2 (Argument Parsing)#####*/
-	// success = load (file_name_cp, &_if);
-	/*#####################################################*/
 	success = load (file_name, &_if);
 
 	/* If load failed, quit. */
@@ -204,7 +192,7 @@ process_exec (void *f_name) {
 		return -1;
 
 	/*#####Newly added in Project 2 (Argument Parsing)#####*/
-	hex_dump(_if.rsp, _if.rsp, KERN_BASE-_if.rsp, true);
+	hex_dump(_if.rsp, _if.rsp, USER_STACK -_if.rsp, true);
 	/*####################################################*/
 
 	/* Start switched process. */
@@ -227,7 +215,8 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	while(1) {}
+	for (int i = 0; i < 1000000000; i++)
+	{;}
 	return -1;
 }
 
@@ -343,15 +332,15 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /*##### Newly added in Project 2 #####*/
 /*##### Initialize user stack #####*/
 /*Initialize user stack with arguments*/
-void stack_arguments (int argc, char *argv[], struct intr_frame *if_) {
+void stack_arguments (int argc, char **argv, struct intr_frame *if_) {
 	char *argv_addr[128]; 	// array that saves addresses of arguments
 	
 	/* Pushing arguments into user stack (right -> left) */
 	for (int i = argc - 1; i >= 0; i--) {
-		int argv_len = strlen(argv[i]);
-		if_->rsp = if_->rsp - (argv_len + 1);  //including NULL
-		memcpy(if_->rsp, argv[i], argv_len + 1);
-		argv_addr[i] = if_->rsp; //save addr of argument for later 
+		int argv_len = strlen(argv[i]) + 1;
+		if_->rsp -= argv_len;  //including NULL
+		memcpy(if_->rsp, argv[i], argv_len);
+		argv_addr[i] = (char *)if_->rsp; //save addr of argument for later 
 	}
 
 	/* Word-align padding */
@@ -371,8 +360,8 @@ void stack_arguments (int argc, char *argv[], struct intr_frame *if_) {
 	}
 
 	/* Return Address */   
-	if_->rsp = if_->rsp - 8;
-	memset(if_->rsp, 0, sizeof(void *));
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
 
 	/* Set %rdi to argc */
 	if_->R.rdi = argc;
@@ -402,12 +391,12 @@ load (const char *file_name, struct intr_frame *if_) {
 	int argc = 0;		/* the number of arguments */
 
 	token = strtok_r (file_name, " ", &save_point);
-	argv[argc] = token;
 
 	while (token != NULL) {
+		argv[argc] = token;
 		token = strtok_r (NULL, " ", &save_point);
 		argc++;
-		argv[argc] = token; 
+		// argv[argc] = token; 
 	}
 	
 	// for (token = strtok_r (file_name, " ", &save_point); token != NULL; token = strtok_r (NULL, " ", &save_point)) {
@@ -422,7 +411,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -505,7 +494,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Parse command line into arguments */
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-	stack_arguments(argc, argv, &if_);
+	stack_arguments(argc, argv, if_);
 	
 	success = true;
 
