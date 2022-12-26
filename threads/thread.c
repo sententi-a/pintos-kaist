@@ -426,15 +426,24 @@ thread_set_priority (int new_priority) {
 /*Compare current thread's priority and the highest priority value in ready_list 
   Call thread_yield if latter is greater */
 void test_max_priority (void) {
+	// if (list_empty(&ready_list)) return;
+
+	// int run_priority = thread_current ()-> priority;
+	// struct list_elem *e = list_begin(&ready_list);
+	// struct thread *t = list_entry(e, struct thread, elem);
+
+	// if (t->priority > run_priority) thread_yield();
+
 	int curr_priority = thread_get_priority();
 
 	if (!list_empty (&ready_list)) {
-		struct list_elem *first_elem_in_ready = list_front (&ready_list);
+		struct list_elem *first_elem_in_ready = list_begin (&ready_list);
 		struct thread *highest_priority = list_entry (first_elem_in_ready, struct thread, elem)->priority;
 
 		if (curr_priority < highest_priority) 
 			thread_yield ();
 	}
+
 	// if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_front (&ready_list), struct thread, elem)->priority)
     //     thread_yield ();
 }
