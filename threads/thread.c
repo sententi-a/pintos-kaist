@@ -209,6 +209,22 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
+	/*###################### Newly added in Project 2 ########################*/
+	/*############################File System Call ###########################*/
+	/* Initialize File Descriptor table (in Kernel Memory)
+       Each entry is struct file * type, STDIN, STDOUT reserved for 0, 1 respectively
+	 */
+	t->fdt = palloc_get_page (PAL_ZERO);
+
+	if (!t->fdt)
+		return TID_ERROR;
+
+	t->fdt[0] = 1;  // dummy values to distinguish fdt[0] and fdt[1] from NULL
+	t->fdt[1] = 2;
+	
+	t->next_fd = 2;
+	/*########################################################################*/
+
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t->tf.rip = (uintptr_t) kernel_thread;
@@ -223,14 +239,14 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-	/*#####Newly added in Project 1 (Priority Scheduling)#####*/
+	/*##################Newly added in Project 1 (Priority Scheduling)#########################*/
 	/*Compare the priorities of the currently running thread and the newly inserted one.
 	  Yield the CPU if the newly arriving thread has higher priority */
 	int curr_priority = thread_get_priority ();
 
 	if (priority > curr_priority) {
 		thread_yield();
-
+	/*#########################################################################################*/
 	return tid;
 	}
 }
@@ -426,23 +442,27 @@ thread_set_priority (int new_priority) {
 /*Compare current thread's priority and the highest priority value in ready_list 
   Call thread_yield if latter is greater */
 void test_max_priority (void) {
-	// if (list_empty(&ready_list)) return;
-
-	// int run_priority = thread_current ()-> priority;
-	// struct list_elem *e = list_begin(&ready_list);
-	// struct thread *t = list_entry(e, struct thread, elem);
-
-	// if (t->priority > run_priority) thread_yield();
-
-	int curr_priority = thread_get_priority();
-
-	if (!list_empty (&ready_list)) {
-		struct list_elem *first_elem_in_ready = list_begin (&ready_list);
-		struct thread *highest_priority = list_entry (first_elem_in_ready, struct thread, elem)->priority;
-
-		if (curr_priority < highest_priority) 
-			thread_yield ();
+	/* If ready list is empty or interrrupt enabled */
+	if (list_empty(&ready_list) || intr_context()) {
+		return;
 	}
+
+	int run_priority = thread_current ()-> priority;
+	struct list_elem *first_elem_in_ready = list_begin(&ready_list);
+	struct thread *highest_priority = list_entry(first_elem_in_ready, struct thread, elem);
+
+	if (highest_priority->priority > run_priority) 
+		thread_yield();
+
+	// int curr_priority = thread_get_priority();
+
+	// if (!list_empty (&ready_list)) {
+	// 	struct list_elem *first_elem_in_ready = list_begin (&ready_list);
+	// 	struct thread *highest_priority = list_entry (first_elem_in_ready, struct thread, elem)->priority;
+
+	// 	if (curr_priority < highest_priority) 
+	// 		thread_yield ();
+	// }
 
 	// if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_front (&ready_list), struct thread, elem)->priority)
     //     thread_yield ();
@@ -547,6 +567,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->original_priority = priority;
 	list_init(&t->donors);
 	t->lock_for_wait = NULL;
+	/*######Newly added in Project 2######*/
+	t->exit_status = 0;
+	/*###################################*/
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

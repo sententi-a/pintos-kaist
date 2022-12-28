@@ -6,6 +6,9 @@
 #include "threads/thread.h"
 #include "intrinsic.h"
 
+/*#####Newly added in Project 2#####*/
+#include "userprog/syscall.h"
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -140,6 +143,7 @@ page_fault (struct intr_frame *f) {
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
 
+
 #ifdef VM
 	/* For project 3 and later. */
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
@@ -156,5 +160,8 @@ page_fault (struct intr_frame *f) {
 			write ? "writing" : "reading",
 			user ? "user" : "kernel");
 	kill (f);
+	/* #####Newly added in Project 2######*/
+	exit(-1);
+	/*###################################*/
 }
 

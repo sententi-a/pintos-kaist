@@ -28,6 +28,12 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/*#####Newly added in Project 2#####*/
+/*#######File System Call#######*/
+#define FDT_PAGES 3  /* 8bytes */
+#define FDT_ENTRY_MAX 1<<9
+#define FDCOUNT_LIMIT FDT_PAGES *(1 << 9) //Limit fdIdx
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -105,7 +111,8 @@ struct thread {
 
 	/*#####Newly added in Project 2#####*/
 	/*##### File Manipulation #####*/
-	struct file **fdt;
+	int exit_status;   /* for exit(), wait()*/
+	struct file **fdt; /* Pointer to File Descriptor Table*/
 	int next_fd;
 
 #ifdef USERPROG

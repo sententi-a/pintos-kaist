@@ -50,14 +50,14 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
-	/*#####Newly added in Project 2 #####*/
-	/*##### Argument parsing #####*/
+	/*############Newly added in Project 2 ############*/
+	/*################ Argument parsing ###############*/
 	char *token, *save_point;
 	token = strtok_r (file_name, " ", &save_point);
-	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
-	/*############################*/
-
 	/* Create a new thread to execute FILE_NAME. */
+	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
+	/*####################################################*/
+
 	// tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
@@ -192,7 +192,7 @@ process_exec (void *f_name) {
 		return -1;
 
 	/*#####Newly added in Project 2 (Argument Parsing)#####*/
-	hex_dump(_if.rsp, _if.rsp, USER_STACK -_if.rsp, true);
+	//hex_dump(_if.rsp, _if.rsp, USER_STACK -_if.rsp, true);
 	/*####################################################*/
 
 	/* Start switched process. */
@@ -224,10 +224,21 @@ process_wait (tid_t child_tid UNUSED) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+	/*#########################Newly added in Project 2##############################*/
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+
+	/*##############File Manipulation#############*/
+	/* Close all the open file in FDT */
+	// for (int i = 2; i < FDT_ENTRY_MAX; i++) {
+	// 		close (i);
+	// }
+	
+	/* Deallocate File Descriptor Table */
+	// palloc_free_page (curr->fdt);
+	/*################################################################################*/
 
 	process_cleanup ();
 }
@@ -396,13 +407,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		argv[argc] = token;
 		token = strtok_r (NULL, " ", &save_point);
 		argc++;
-		// argv[argc] = token; 
 	}
-	
-	// for (token = strtok_r (file_name, " ", &save_point); token != NULL; token = strtok_r (NULL, " ", &save_point)) {
-	// 	argv[argc] = token;
-	// 	argc++;
-	// }
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -416,6 +421,11 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+
+	/*#########Newly added in Project 2#########*/
+	/*###########File Manipulation#############*/
+	//file_deny_write (file);
+	/*#########################################*/
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -495,6 +505,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 	stack_arguments(argc, argv, if_);
+	/*####################################*/
 	
 	success = true;
 
