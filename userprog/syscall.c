@@ -103,7 +103,7 @@ void check_address (void *addr) {
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f) {
+syscall_handler (struct intr_frame *f UNUSED) {
 	/*##### Newly added in Project 2 #####*/
 	/*##### System Call #####*/
 	// TODO: Your implementation goes here.
@@ -120,11 +120,11 @@ syscall_handler (struct intr_frame *f) {
 			exit (f->R.rdi);
 			break;
 
-		case SYS_FORK :
-			break;
+		// case SYS_FORK :
+		// 	break;
 
-		case SYS_EXEC :
-			break;
+		// case SYS_EXEC :
+		// 	break;
 
 		case SYS_WAIT :
 			f->R.rax = wait (f->R.rdi);
@@ -179,7 +179,7 @@ void halt (void) {
 }
 
 int wait (pid_t pid) {
-	process_wait (pid);
+	return process_wait (pid);
 }
 
 void exit (int status) {
@@ -237,10 +237,10 @@ bool remove (const char *file) {
 int open (const char *file) {
 	check_address (file);
 
-	//lock_acquire (&filesys_lock);
-	/* Try opening file */
+	lock_acquire (&filesys_lock);
+	/* Try to open file */
 	struct file *open_file = filesys_open (file);
-	//lock_release (&filesys_lock);
+	lock_release (&filesys_lock);
 
 	/* Return -1 when file could not be opened */
 	if (open_file == NULL) {
@@ -248,11 +248,11 @@ int open (const char *file) {
 	}
 
 	/* Add file to File descriptor table */
-	int fd = add_file_to_fdt (file);
+	int fd = add_file_to_fdt (open_file);
 
 	/* Close the file when fdt is full */
 	if (fd == -1) {
-		file_close (file);
+		file_close (open_file);
 	}
 
 	return fd;
@@ -282,26 +282,16 @@ int read (int fd, void *buffer, unsigned length) {
 
 	/* Standard Input */
 	if (fd == STDIN_FILENO) {
-		//unsigned char *buf = buffer;
+		unsigned char *buf = buffer;
 
-		// for (bytes_read = 0; bytes_read < length; bytes_read++) {
-		// 	char key = input_getc();
-		// 	*buf++ = key;
-		// 	if (key == '\0')
-		// 		break;
-		// }
-		// bytes_read = length;
-
-		char input_data[length+1];
-		bytes_read = 0;
-		while (bytes_read < length) {
-			input_data[bytes_read] = input_getc ();
-			if (input_data[bytes_read] == '\0') {
+		for (bytes_read = 0; bytes_read < length; bytes_read++) {
+			char key = input_getc();
+			*buf++ = key;
+			if (key == '\0')
 				break;
-			}
-			bytes_read++;
 		}
-		buffer = input_data;
+		//bytes_read = length;
+
 		return bytes_read;
 	}
 
@@ -325,8 +315,8 @@ int read (int fd, void *buffer, unsigned length) {
 
 		return bytes_read;
 	}
-	//return bytes_read;
 }
+
 
 /* Writes length bytes of data from buffer to open file fd 
    Return the number of bytes actually written 
@@ -342,7 +332,7 @@ int write (int fd, const void *buffer, unsigned length) {
 	if (fd == STDOUT_FILENO) {
 		putbuf (buffer, length);
 		bytes_written = length;
-		//return bytes_written;
+		return bytes_written;
 	}
 
 	/* Standard Input */
@@ -362,9 +352,9 @@ int write (int fd, const void *buffer, unsigned length) {
 		bytes_written = file_write (file, buffer, length);
 		lock_release (&filesys_lock);
 		
-		//return bytes_written;
+		return bytes_written;
 	}
-	return bytes_written;
+	//return bytes_written;
 }
 
 /* Sets the current position in file to position bytes from the 

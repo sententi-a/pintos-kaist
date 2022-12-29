@@ -6,9 +6,6 @@
 #include "threads/thread.h"
 #include "intrinsic.h"
 
-/*#####Newly added in Project 2#####*/
-#include "userprog/syscall.h"
-
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
