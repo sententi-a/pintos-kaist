@@ -95,8 +95,9 @@ syscall_init (void) {
    3. page is not allocated */
 void check_address (void *addr) {
 	struct thread *curr = thread_current ();
-
+	//printf("저기\n");
 	if (addr == NULL || ! is_user_vaddr (addr) || pml4_get_page (curr->pml4, addr) == NULL){
+		//printf("여기\n");
 		exit(-1);
 	}
 }
