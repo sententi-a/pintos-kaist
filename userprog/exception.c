@@ -145,6 +145,10 @@ page_fault (struct intr_frame *f) {
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
 #endif
+	// System Call ----------------------------------------------------------------------
+	// page fault 오류시 kill말고 그냥 에러로 종료시키기 위해? 정상 종료하기 위해?
+	exit(-1);
+	// System Call ----------------------------------------------------------------------
 
 	/* Count page faults. */
 	page_fault_cnt++;
@@ -155,9 +159,5 @@ page_fault (struct intr_frame *f) {
 			not_present ? "not present" : "rights violation",
 			write ? "writing" : "reading",
 			user ? "user" : "kernel");
-	// System Call ----------------------------------------------------------------------
-	// page fault 오류시 kill말고 그냥 에러로 종료시키기 위해? 정상 종료하기 위해?
-	exit(-1);
-	// System Call ----------------------------------------------------------------------
 }
 

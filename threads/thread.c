@@ -219,6 +219,7 @@ thread_create (const char *name, int priority,
 	t->file_dt[0] = 1;
 	t->file_dt[1] = 2;
 
+
 	struct thread *cur = thread_current();
 	list_push_back(&cur->child_list, &t->child_elem);
 	// System Call ----------------------------------------------------------------------
@@ -241,9 +242,8 @@ thread_create (const char *name, int priority,
 
 	// curr 변수에 현재 실행 중인 스레드를 가져온다.
 	// cmp_priority함수를 통해 t,curr를 비교해서 curr이 더 크다면 yield함수를 통해 cpu양보
-	struct thread *curr = thread_current();
 	
-	if (cmp_priority(&t->elem, &curr->elem, NULL)){
+	if (cmp_priority(&t->elem, &cur->elem, NULL)){
 		thread_yield();
 	}
 
@@ -453,7 +453,7 @@ static void
 kernel_thread (thread_func *function, void *aux) {
 	ASSERT (function != NULL);
 
-	intr_enable ();       /* The scheduler runs with interrupts off. */
+	intr_enable ();	      /* The scheduler runs with interrupts off. */
 	function (aux);       /* Execute the thread function. */
 	thread_exit ();       /* If function() returns, kill the thread. */
 }
@@ -488,6 +488,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	sema_init(&t->fork_sema, 0);
 	sema_init(&t->free_sema, 0);
 	sema_init(&t->wait_sema, 0);
+	t->running = NULL;
 	// System Call ----------------------------------------------------------------------
 }
 
@@ -754,7 +755,7 @@ bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *au
 // 현재 스레드가 더 작다면 yield호출
 void test_max_priority(void){
 	// ready리스트가 비었다면 바로 리턴
-	if (list_empty(&ready_list) || intr_context ()){
+	if (list_empty(&ready_list)){
 		return;
 	}
 
@@ -767,3 +768,21 @@ void test_max_priority(void){
 	}
 }
 // Priority Scheduling -----------------------------------------------------------
+
+// System Call ----------------------------------------------------------------------
+
+struct thread *get_child_pid(int pid){
+
+	struct thread *curr = thread_current();
+	struct list *child_list = &curr->child_list;
+
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e)){
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		if (t->tid == pid){
+			return t;
+		}
+	}
+	return NULL;
+}
+
+// System Call ----------------------------------------------------------------------

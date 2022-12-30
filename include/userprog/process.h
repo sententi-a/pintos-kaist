@@ -10,7 +10,6 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (struct thread *next);
 // Command Line Parsing -------------------------------------------------------
-// void argument_stack(char** token_list, int count, struct intr_frame *if_);
-struct thread *get_child_pid(int pid);
+void argument_stack(char** token_list, int count, struct intr_frame *if_);
 // Command Line Parsing -------------------------------------------------------
 #endif /* userprog/process.h */

@@ -63,8 +63,8 @@ sema_down (struct semaphore *sema) {
 
 	ASSERT (sema != NULL);
 	ASSERT (!intr_context ());
-
 	old_level = intr_disable ();
+
 	while (sema->value == 0) { // 그냥 안정성을 위해 if 대신 while문을 사용한다.
 		// list_push_back (&sema->waiters, &thread_current ()->elem); : 맨 뒤에 넣는 함수이기에 주석
 		// semaphore --------------------------------------------------------------------
@@ -75,6 +75,7 @@ sema_down (struct semaphore *sema) {
 		// semaphore --------------------------------------------------------------------
 		thread_block ();
 	}
+
 	sema->value--;
 	intr_set_level (old_level);
 }
@@ -113,7 +114,6 @@ sema_up (struct semaphore *sema) {
 	enum intr_level old_level;
 
 	ASSERT (sema != NULL);
-
 	old_level = intr_disable ();
 	// semaphore --------------------------------------------------------------------
 
@@ -127,7 +127,6 @@ sema_up (struct semaphore *sema) {
 	test_max_priority();
 
 	// semaphore --------------------------------------------------------------------
-	
 	intr_set_level (old_level);
 }
 

@@ -8,10 +8,10 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 // System Call ----------------------------------------------------------------------
-//#include "threads/init.h" // halt 함수에서 power_off 함수를 이용하기 위해
+#include "threads/init.h" // halt 함수에서 power_off 함수를 이용하기 위해
 #include "filesys/filesys.h" // 아래서 만들 함수에서 filesys.c에 있는 함수를 이용하기 위해
-//#include "threads/synch.h"
-#include <list.h>
+#include "threads/synch.h"
+// #include <list.h>
 #include "filesys/file.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
@@ -188,7 +188,7 @@ int exec(const char *file){
 	int size = strlen(file) + 1;
 	char *copy_file = palloc_get_page(PAL_ZERO);
 
-	if ((copy_file) == NULL){
+	if (copy_file == NULL){
 		exit(-1);
 	}
 	strlcpy(copy_file, file, size);
@@ -215,9 +215,9 @@ bool remove(const char *file){
 int open(const char *file){
 	check_addr(file);
 
-	//lock_acquire(&filesys_lock);
+	lock_acquire(&filesys_lock);
 	struct file *open_file = filesys_open(file);
-	//lock_release(&filesys_lock);
+	lock_release(&filesys_lock);
 
 	// 파일이 제대로 생성되었는지 확인
 	if (open_file == NULL){
@@ -319,11 +319,8 @@ int filesize(int fd){
 
 void seek(int fd, unsigned position){
 	struct file *file = find_file_by_fd(fd);
-	if (fd < 2){
-		return;
-	}
-
-	if (file == NULL){
+	
+	if (file <= 2){
 		return;
 	}
 
@@ -332,15 +329,12 @@ void seek(int fd, unsigned position){
 
 unsigned tell(int fd){
 	struct file *file = find_file_by_fd(fd);
-	if (fd < 2){
+	
+	if (file <= 2){
 		return;
 	}
 
-	if (file == NULL){
-		return;
-	}
-
-	return file_tell(fd);
+	return file_tell(file);
 }
 
 // System Call ----------------------------------------------------------------------

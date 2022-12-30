@@ -124,6 +124,7 @@ struct thread {
 	struct semaphore fork_sema; // fork에서 자식 프로세스의 복제가 완전히 끝날때까지 대기
 	struct semaphore free_sema; // 자식의 exit_status를 받을때 까지 대기
 	struct intr_frame parent_if; // fork 호출시 자식 프로세스에게 복사해줄 인터럽트 프레임
+	struct file *running;
 	// System Call ----------------------------------------------------------------------
 
 
@@ -195,5 +196,5 @@ void donation_priority(void);
 void remove_with_lock(struct lock *lock);
 void refresh_priority(void);
 // Priority Donation -------------------------------------------------------------
-
+struct thread *get_child_pid(int pid);
 #endif /* threads/thread.h */
