@@ -22,20 +22,18 @@ void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
 /*#############Newly added in Project 2###############*/
-/*################Process System Call#################*/
+/*-----------------Process System Call------------------*/
 typedef int pid_t;
 typedef int32_t off_t;
 
 void halt (void) NO_RETURN;
 void exit (int status) NO_RETURN;
-pid_t fork (const char *thread_name);
+tid_t fork (const char *thread_name);
 int exec (const char *file);
 int wait (pid_t pid);
-/*#################File System call##################*/
+/*--------------------File System call------------------*/
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
-
-struct lock filesys_lock; /* for synchronization */
 
 bool create (const char *file, unsigned initial_size);
 bool remove (const char *file);
@@ -95,22 +93,21 @@ syscall_init (void) {
    3. page is not allocated */
 void check_address (void *addr) {
 	struct thread *curr = thread_current ();
-	//printf("저기\n");
 	if (addr == NULL || ! is_user_vaddr (addr) || pml4_get_page (curr->pml4, addr) == NULL){
-		//printf("여기\n");
 		exit(-1);
 	}
 }
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f UNUSED) {
+syscall_handler (struct intr_frame *f) {
 	/*##### Newly added in Project 2 #####*/
 	/*##### System Call #####*/
 	// TODO: Your implementation goes here.
 
 	/* Copy system call arguments and call system call*/
 	//printf ("system call!\n");
+	int syscall_num = f->R.rax;
 	switch(f->R.rax) {
 		/* Process related system calls */
 		case SYS_HALT :
@@ -121,11 +118,16 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			exit (f->R.rdi);
 			break;
 
-		// case SYS_FORK :
-		// 	break;
+		case SYS_FORK :
+			memcpy (&thread_current ()->if_, f, sizeof(struct intr_frame));
+			f->R.rax = fork (f->R.rdi);
+			break;
 
-		// case SYS_EXEC :
-		// 	break;
+		case SYS_EXEC :
+			if (exec (f->R.rdi) == -1) {
+				exit (-1);
+			}
+			break;
 
 		case SYS_WAIT :
 			f->R.rax = wait (f->R.rdi);
@@ -179,10 +181,7 @@ void halt (void) {
 	power_off ();
 }
 
-int wait (pid_t pid) {
-	return process_wait (pid);
-}
-
+/**/
 void exit (int status) {
 	struct thread *curr = thread_current ();
 	curr->exit_status = status;
@@ -191,15 +190,42 @@ void exit (int status) {
 	thread_exit ();
 }
 
-// pid_t fork (const char *thread_name) {
+/* Waits for thread TID / process PID to die and returns its exit status */
+int wait (pid_t pid) {
+	return process_wait (pid);
+}
 
-// }
-// int exec (const char *file) {
+/* Run program which execute 'file' (switch current process)
+   Creates thread and run exec()
+   Returns pid of the new child process if child load file successfully, -1 on failure 
+   Parent calling exec should wait 
+   until child process is created and loads the executable completely */
+int exec (const char *file) {
+	check_address (file);
+	/* wait을 여기에서 부르려면 child가 exit을 불러야 한다는 건데.. 그럼 조건에 맞지 않음 
+	   자식은 load 후 sema_up을 불러야 하는데 이걸 어디서 부르지 process.c의 load() 안에서 ?*/
+	int fn_size = strlen(file) + 1;
+	char *fn_copy = palloc_get_page(PAL_ZERO);
 
-// }
-// int wait (pid_t pid) {
+	/* page allocation failure */
+	if (fn_copy == NULL) {
+		exit (-1);
+	}
 
-// }
+	strlcpy (fn_copy, file, fn_size);
+
+	if (process_exec (fn_copy) == -1) {
+		return -1;
+	}
+
+	NOT_REACHED (); /* 이건 왜 넣는 건지....? */
+	return 0; 
+}
+
+
+tid_t fork (const char *thread_name) {
+	return process_fork (thread_name, &thread_current ()->if_);
+}
 
 /*##########################################################*/
 

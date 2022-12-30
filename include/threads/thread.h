@@ -5,6 +5,9 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+/*#####Newly added in Project 2#####*/
+#include "threads/synch.h"
+/*#################################*/
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -98,22 +101,38 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
-	/*Newly added in Project 1*/
+	/*################Newly added in Project 1#################*/
+	/*-----------------------Alarm Clock----------------------*/
 	int64_t wakeup_tick; 				/*Tick till wake up. */
-	/* (Priority Donation) */
+	/*-------------------Priority Donation--------------------*/
 	int original_priority;  			/* Original priority */
 	struct lock *lock_for_wait; 			/* Address of which the thread is wating for lock */
 	struct list donors;					/* Priority donors list */
 	struct list_elem donor_elem; 		/* Donors list element */
+	/*#########################################################*/
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
-	/*#####Newly added in Project 2#####*/
-	/*##### File Manipulation #####*/
+	/*###############Newly added in Project 2###############*/
+	/*-----------------Process System Call------------------*/
+	struct list children; 	/* Child process list */
+	struct list_elem child_elem; /* Child process list element */
+	struct semaphore wait_sema; /* Semaphore for wait() - to signal to parent process*/
+	struct semaphore fork_sema; /* Semaphore for fork() */
+	struct semaphore reap_sema; /* Semaphore for reaping zombie child processes */
+
+	struct intr_frame if_; /* Interrupt frame for switching */
+
 	int exit_status;   /* for exit(), wait()*/
+	int wait_call_count; 
+	/*-----------------File System Call --------------------*/
 	struct file **fdt; /* Pointer to File Descriptor Table*/
-	int next_fd;
+	int next_fd; /* Index for open spot in FDT */
+	struct file *running; /* Running File */
+	/*#####################################################*/
+
+	
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -171,4 +190,9 @@ int64_t get_next_tick_to_awake (void); 			/*Returns next_tick_to_awake(global va
 /*Project 1 (Priority Scheduling)*/
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
 void test_max_priority (void);
+/*############################################*/
+/*############Newly added in Project 2###############*/
+/*---------------Process System Call-----------------*/
+struct thread *find_child_process (tid_t child_tid);
+/*###################################################*/
 #endif /* threads/thread.h */

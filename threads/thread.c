@@ -121,10 +121,11 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
-	/*#####Newly added in project 1#####*/
+	/*#####Newly added in Project 1#####*/
 	list_init (&sleep_list);
-	//next_tick_to_awake = INT64_MAX;
-
+	next_tick_to_awake = INT64_MAX;
+	/*#################################*/
+	
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -210,11 +211,11 @@ thread_create (const char *name, int priority,
 	tid = t->tid = allocate_tid ();
 
 	/*###################### Newly added in Project 2 ########################*/
-	/*############################File System Call ###########################*/
+	/*---------------------------File System Call----------------------------*/
 	/* Initialize File Descriptor table (in Kernel Memory)
        Each entry is struct file * type, STDIN, STDOUT reserved for 0, 1 respectively
 	 */
-	t->fdt = palloc_get_page (PAL_ZERO);
+	t->fdt = palloc_get_multiple (PAL_ZERO, FDT_PAGES);
 
 	if (!t->fdt)
 		return TID_ERROR;
@@ -223,6 +224,14 @@ thread_create (const char *name, int priority,
 	t->fdt[1] = 2;
 	
 	t->next_fd = 2;
+	/*---------------------------Process System Call-------------------------*/
+	/* Add new thread 't' into current thread's child_list */
+	/*이게 여기에 있는 이유는 아마 fork를 할 때 타고 타고 들어와서 thread_create를 부르기 때문?
+	  그리고 모든 프로세스의 조상인 init process가 pintos?? 
+	  위치도 중요하다고 생각.. 
+	*/
+	struct thread *curr = thread_current ();
+	list_push_back (&curr->children, &t->child_elem);
 	/*########################################################################*/
 
 	/* Call the kernel_thread if it scheduled.
@@ -247,11 +256,11 @@ thread_create (const char *name, int priority,
 	if (priority > curr_priority) {
 		thread_yield();
 	/*#########################################################################################*/
-	return tid;
 	}
+	return tid;
 }
 
-/*****Newly added in Project 1 (Priority Scheduling)******/
+/*################Newly added in Project 1 (Priority Scheduling)#################*/
 /* Determines whether b's priority is smaller than a's priority*/
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
 	/*Is new greater than old?*/
@@ -259,6 +268,7 @@ bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *a
 	struct thread *old = list_entry(b, struct thread, elem);
 	return new->priority > old->priority ? 1 : 0;
 }
+/*#######################################################################*/
 
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
@@ -297,8 +307,8 @@ thread_unblock (struct thread *t) {
 	intr_set_level (old_level);
 }
 
-/**************************************************/
-/*****Newly added in Project 1 (Alarm Clock)******/
+
+/*########################Newly added in Project 1 (Alarm Clock)############################*/
 /*Sleeps a thread. Change the running thread state to BLOCKED and add it into the sleep_list*/
 void thread_sleep(int64_t ticks) {
 	/*If the current thread is not idle thread, change the state of the caller thread to BLOCKED, 
@@ -321,7 +331,6 @@ void thread_sleep(int64_t ticks) {
 	intr_set_level (old_level); // enable interrupt
 }
 
-/*****Newly added in Project 1 (Alarm Clock)*****/
 /*Awakes a thread. Find threads to awake walking through the sleep_list and unblock it.*/
 void thread_awake(int64_t ticks) {
 	next_tick_to_awake = INT64_MAX;
@@ -346,7 +355,6 @@ void thread_awake(int64_t ticks) {
 	}
 }
 
-/*****Newly added in Project 1 (Alarm Clock)*****/
 /*Saves a minimum tick into the next_tick_to_awake variable*/
 void update_next_tick_to_awake(int64_t ticks) {
 	next_tick_to_awake = MIN(next_tick_to_awake, ticks);
@@ -357,7 +365,7 @@ int64_t get_next_tick_to_awake(void) {
 	/*최소 tick 값을 반환*/
 	return next_tick_to_awake;
 }
-/*************************************************/	
+/*#######################################################################################*/	
 
 /* Returns the name of the running thread. */
 const char *
@@ -424,7 +432,7 @@ thread_yield (void) {
 	intr_set_level (old_level);
 }
 
-/*#####Modified in Project 1 (Priority Scheduling)#####*/
+/*#################Modified in Project 1 (Priority Scheduling)###################*/
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
@@ -453,19 +461,6 @@ void test_max_priority (void) {
 
 	if (highest_priority->priority > run_priority) 
 		thread_yield();
-
-	// int curr_priority = thread_get_priority();
-
-	// if (!list_empty (&ready_list)) {
-	// 	struct list_elem *first_elem_in_ready = list_begin (&ready_list);
-	// 	struct thread *highest_priority = list_entry (first_elem_in_ready, struct thread, elem)->priority;
-
-	// 	if (curr_priority < highest_priority) 
-	// 		thread_yield ();
-	// }
-
-	// if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_front (&ready_list), struct thread, elem)->priority)
-    //     thread_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -473,6 +468,31 @@ int
 thread_get_priority (void) {
 	return thread_current ()->priority;
 }
+/*##########################################################################*/
+
+/*########################Newly added in Project 2#########################*/
+/*--------------Process System Call----------------*/
+/* Find child process with 'child_tid' in current thread's children list
+   Returns child process (struct thread *) on success, NULL on failure
+*/
+struct thread *
+find_child_process (tid_t child_tid) {
+	struct thread *curr = thread_current ();
+
+	struct list_elem *child;
+
+	/* Walking through the children list */
+	for (child = list_begin(&curr->children); 
+		 child != list_end (&curr->children); child = list_next (child)) {
+			struct thread *child_process = list_entry (child, struct thread, child_elem);
+			/* If tid matches */
+			if (child_process->tid == child_tid) {
+				return child_process;
+			}
+	}
+	return NULL;
+}
+/*#########################################################################*/
 
 /* Sets the current thread's nice value to NICE. */
 void
@@ -563,13 +583,24 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
-	/*#####Newly added in Project 1 (Priority Donation)#####*/
+
+	/*################Newly added in Project 1##################*/
+	/*------------------Priority Donation---------------------*/
 	t->original_priority = priority;
 	list_init(&t->donors);
 	t->lock_for_wait = NULL;
-	/*######Newly added in Project 2######*/
+	/*#####################################################*/
+
+	/*###############Newly added in Project 2###############*/
+	/*-----------------Process System Call------------------*/
+	list_init (&t->children); /* Initialize a process' children list*/
+	sema_init (&t->wait_sema, 0); /*Initialize semaphore for wait(), exit()*/
+	sema_init (&t->reap_sema, 0); 
+	sema_init (&t->fork_sema, 0);
 	t->exit_status = 0;
-	/*###################################*/
+	t->running = NULL;
+	/*#####################################################*/
+
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
