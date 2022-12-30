@@ -16,6 +16,7 @@
 #include "threads/vaddr.h"
 #include "userprog/process.h"
 #include "threads/palloc.h"
+#include "devices/input.h"
 // System Call ----------------------------------------------------------------------
 
 void syscall_entry (void);
@@ -355,20 +356,20 @@ void check_addr(const uint64_t *addr){
 int add_file_to_fdt(struct file *file){
 	struct thread *t = thread_current();
 	struct file **fdt = t->file_dt;
-	int fd = t->fdidx;
 
 	// fdt에 빈 자리가 날 때까지 fd 값을 계속 1씩 올린다.
-	while (fdt[fd] != NULL && fd < FDT_COUNT_LIMIT){
-		fd++;
+	while (fdt[t->fdidx] != NULL && t->fdidx < FDT_COUNT_LIMIT){
+		t->fdidx++;
 	}
 
-	if (fd >= FDT_COUNT_LIMIT){
+
+	if (t->fdidx >= FDT_COUNT_LIMIT){
 		return -1;
 	}
 
 	// 해당 배열 인덱스에 파일을 배치하고 해당 fdt 인덱스 값을 반환
-	fdt[fd] = file;
-	return fd;
+	fdt[t->fdidx] = file;
+	return t->fdidx;
 }
 
 // 현재 실행중인 스레드의 fdt에서 해당 fd에 있는 file주소 리턴

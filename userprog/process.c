@@ -378,6 +378,7 @@ process_exit (void) {
 	palloc_free_multiple(curr->file_dt, FDT_PAGES);
 	file_close(curr->running);
 
+	
 	// semaphore 처리?
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->free_sema);
@@ -509,7 +510,7 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
-	
+
 	// System Call ----------------------------------------------------------------------
 	file_deny_write(file); // 파일 쓰기 금지 함수
 	t->running = file;
