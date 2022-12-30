@@ -155,6 +155,9 @@ page_fault (struct intr_frame *f) {
 			not_present ? "not present" : "rights violation",
 			write ? "writing" : "reading",
 			user ? "user" : "kernel");
-	kill (f);
+	// System Call ----------------------------------------------------------------------
+	// page fault 오류시 kill말고 그냥 에러로 종료시키기 위해? 정상 종료하기 위해?
+	exit(-1);
+	// System Call ----------------------------------------------------------------------
 }
 

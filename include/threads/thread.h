@@ -5,6 +5,9 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+// System Call ----------------------------------------------------------------------
+#include "threads/synch.h"
+// System Call ----------------------------------------------------------------------
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -27,6 +30,12 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+// System Call ----------------------------------------------------------------------
+#define FDT_PAGES 3
+#define FDT_COUNT_LIMIT FDT_PAGES *(1<<9)
+// System Call ----------------------------------------------------------------------
+
 
 /* A kernel thread or user process.
  *
@@ -96,12 +105,27 @@ struct thread {
 
 	// Alarm Clock -------------------------------------------------------------------
 	int64_t wakeup_tick;
+	// Alarm Clock -------------------------------------------------------------------
+	
 	// Priority Donation -------------------------------------------------------------
 	int init_priority; // 초기 우선순위 값을 저장할 필드
 	struct lock *wait_on_lock; // lock 자료구조의 주소를 저장할 필드
 	struct list donations; // multiple donation을 위한 리스트
 	struct list_elem donation_elem; // 위의 리스트를 위한 elem
 	// Priority Donation -------------------------------------------------------------
+
+	// System Call ----------------------------------------------------------------------
+	int exit_status; // 자식이 살았는지 죽었는지 판단하기 위한 변수
+	struct file **file_dt; // 파일 디스크립트 테이블을 넣어줄 필드
+	int fdidx; // FDT의 인덱스 : 파일을 찾기위한
+	struct list child_list; // 자식 프로세스를 모아두는 필드
+	struct list_elem child_elem; // 자식 프로세스를 찾기 위한 elem
+	struct semaphore wait_sema; // 부모가 자식 프로세스가 죽을때 까지 대기
+	struct semaphore fork_sema; // fork에서 자식 프로세스의 복제가 완전히 끝날때까지 대기
+	struct semaphore free_sema; // 자식의 exit_status를 받을때 까지 대기
+	struct intr_frame parent_if; // fork 호출시 자식 프로세스에게 복사해줄 인터럽트 프레임
+	// System Call ----------------------------------------------------------------------
+
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

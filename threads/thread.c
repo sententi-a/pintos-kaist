@@ -123,7 +123,7 @@ thread_init (void) {
 
 	// alarm clock -------------------------------------------------------------------
 	list_init(&sleep_list); // sleep리스트를 초기화
-	// next_tick_to_awake = INT64_MAX; // 최소값을 찾을때 비교 대상이므로 초기값을 max값으로 초기화
+	//next_tick_to_awake = INT64_MAX; // 최소값을 찾을때 비교 대상이므로 초기값을 max값으로 초기화
 	// alarm clock -------------------------------------------------------------------
 	
 	/* Set up a thread structure for the running thread. */
@@ -209,6 +209,20 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
+	// System Call ----------------------------------------------------------------------
+	t->file_dt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if(t->file_dt == NULL){
+		return TID_ERROR;
+	}
+
+	t->fdidx = 2;
+	t->file_dt[0] = 1;
+	t->file_dt[1] = 2;
+
+	struct thread *cur = thread_current();
+	list_push_back(&cur->child_list, &t->child_elem);
+	// System Call ----------------------------------------------------------------------
+
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t->tf.rip = (uintptr_t) kernel_thread;
@@ -228,12 +242,12 @@ thread_create (const char *name, int priority,
 	// curr 변수에 현재 실행 중인 스레드를 가져온다.
 	// cmp_priority함수를 통해 t,curr를 비교해서 curr이 더 크다면 yield함수를 통해 cpu양보
 	struct thread *curr = thread_current();
+	
 	if (cmp_priority(&t->elem, &curr->elem, NULL)){
 		thread_yield();
 	}
 
 	// Priority Scheduling -----------------------------------------------------------
-
 	return tid;
 }
 
@@ -339,12 +353,12 @@ thread_yield (void) {
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
-	if (curr != idle_thread)
+	if (curr != idle_thread){
 		// list_push_back (&ready_list, &curr->elem); : 이 코드는 ready리스트 맨뒤에 추가하는 함수다.
 		// Priority Scheduling -----------------------------------------------------------
 		list_insert_ordered(&ready_list, &curr->elem, &cmp_priority, NULL);
 		// Priority Scheduling -----------------------------------------------------------
-
+	}
 	do_schedule (THREAD_READY); // context switch 작업수행 - 현재 수행되는 스레드 ready로 전환
 	intr_set_level (old_level); // 인자로 전달된 인터럽트 상태로 인터럽트 설정하고 이전 인터럽트 상태 반환
 }
@@ -353,7 +367,7 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	// 현재 스레드의 우선순위를 바꾸어준다.
-	thread_current ()->priority = new_priority;
+	thread_current ()->init_priority = new_priority;
 
 	// Priority Donation -------------------------------------------------------------
 	refresh_priority(); // test_max_priority함수를 호출전에 우선순위를 갱신하기위해 호출
@@ -466,6 +480,15 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
 	// Priority Donation -------------------------------------------------------------
+
+	// System Call ----------------------------------------------------------------------
+	t->exit_status = 0; // exit_status 0으로 초기화
+	// 새로 추가한 sema 초기화
+	list_init(&t->child_list);
+	sema_init(&t->fork_sema, 0);
+	sema_init(&t->free_sema, 0);
+	sema_init(&t->wait_sema, 0);
+	// System Call ----------------------------------------------------------------------
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -731,7 +754,7 @@ bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *au
 // 현재 스레드가 더 작다면 yield호출
 void test_max_priority(void){
 	// ready리스트가 비었다면 바로 리턴
-	if (list_empty(&ready_list)){
+	if (list_empty(&ready_list) || intr_context ()){
 		return;
 	}
 

@@ -70,7 +70,7 @@ sema_down (struct semaphore *sema) {
 		// semaphore --------------------------------------------------------------------
 
 		// 세마포어 큐을 우선순위로 정렬시켜서 넣기위해
-		list_insert_ordered(&sema->waiters, &thread_current()->elem, &cmp_priority, NULL);
+		list_insert_ordered(&sema->waiters, &thread_current()->elem, cmp_priority, NULL);
 
 		// semaphore --------------------------------------------------------------------
 		thread_block ();
@@ -117,7 +117,7 @@ sema_up (struct semaphore *sema) {
 	old_level = intr_disable ();
 	// semaphore --------------------------------------------------------------------
 
-	if (!list_empty (&sema->waiters)){
+	if (!list_empty(&sema->waiters)){
 		// 대기 리스트에 있던 동안 우선순위가 변했을수도 있으니 다시 정렬?
 		list_sort(&sema->waiters, &cmp_priority, NULL);	//w정렬 시켜주는 함수?
 		thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
@@ -341,12 +341,12 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
+	if (!list_empty (&cond->waiters)){
 	// semaphore --------------------------------------------------------------------
 		list_sort(&cond->waiters, &cmp_sem_priority, NULL); // 대기 리스트를 우선순위로 정렬
 	// semaphore --------------------------------------------------------------------
-		sema_up (&list_entry (list_pop_front (&cond->waiters),
-					struct semaphore_elem, elem)->semaphore);
+		sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
