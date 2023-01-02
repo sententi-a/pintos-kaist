@@ -107,7 +107,7 @@ syscall_handler (struct intr_frame *f) {
 
 	/* Copy system call arguments and call system call*/
 	//printf ("system call!\n");
-	int syscall_num = f->R.rax;
+	
 	switch(f->R.rax) {
 		/* Process related system calls */
 		case SYS_HALT :
@@ -202,8 +202,6 @@ int wait (pid_t pid) {
    until child process is created and loads the executable completely */
 int exec (const char *file) {
 	check_address (file);
-	/* wait을 여기에서 부르려면 child가 exit을 불러야 한다는 건데.. 그럼 조건에 맞지 않음 
-	   자식은 load 후 sema_up을 불러야 하는데 이걸 어디서 부르지 process.c의 load() 안에서 ?*/
 	int fn_size = strlen(file) + 1;
 	char *fn_copy = palloc_get_page(PAL_ZERO);
 
@@ -218,7 +216,7 @@ int exec (const char *file) {
 		return -1;
 	}
 
-	NOT_REACHED (); /* 이건 왜 넣는 건지....? */
+	// NOT_REACHED (); /* 이건 왜 넣는 건지....? */
 	return 0; 
 }
 
@@ -355,7 +353,7 @@ int write (int fd, const void *buffer, unsigned length) {
 
 	int bytes_written;
 
-	/* Standart Output */
+	/* Standard Output */
 	if (fd == STDOUT_FILENO) {
 		putbuf (buffer, length);
 		bytes_written = length;
@@ -399,7 +397,7 @@ void seek (int fd, unsigned position) {
 	file_seek (file, position);
 }
 
-/* Return the current poisition in file mapped with fd
+/* Return the current position in file mapped with fd
    as a byte offset from the start of the file 
    Gitbook : Returns the position of the next byte to be read or written
    in open file fd, expressed in bytes from the beginning of the file

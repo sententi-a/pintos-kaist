@@ -148,10 +148,11 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
 	memcpy (newpage, parent_page, PGSIZE);
-	writable = is_writable (pte);
 	
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+	writable = is_writable (pte);
+	
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
 		return false;
@@ -273,14 +274,14 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
-
+	
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
+	palloc_free_page (file_name);
+
 	/* If load failed, quit. */
 	if (!success) {
-		palloc_free_page (file_name);
-
 		return -1;
 	}
 
@@ -320,11 +321,9 @@ process_wait (tid_t child_tid UNUSED) {
 	/* Find child process (chlid_tid), if not, return NULL */
 	struct thread *curr = thread_current ();
 	struct thread *child = find_child_process (child_tid);
-	// printf("여기여기여기여기여기%s\n", child->name);
 	
 	/* If pid does not refer to a direct child of a calling process */
 	if (child == NULL) {
-		// printf("여ㅣ가머니라ㅓㅣㅇ냐ㅐㅁㄴㄹ얄ㅇㄴ\n");
 		return -1;
 	}
 
@@ -547,8 +546,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	// file = filesys_open (argv[0]);
-	file = filesys_open (file_name);
+	// printf("파일 이름은 ? %s", argv[0]);
+	file = filesys_open (argv[0]);
+	// file = filesys_open (file_name);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;

@@ -34,8 +34,7 @@ typedef int tid_t;
 /*#####Newly added in Project 2#####*/
 /*#######File System Call#######*/
 #define FDT_PAGES 3  /* 8bytes */
-#define FDT_ENTRY_MAX 1<<9
-#define FDCOUNT_LIMIT FDT_PAGES *(1 << 9) //Limit fdIdx
+#define FDCOUNT_LIMIT FDT_PAGES *1 << 9 //Limit fdIdx
 
 /* A kernel thread or user process.
  *
@@ -125,7 +124,7 @@ struct thread {
 	struct intr_frame if_; /* Interrupt frame for switching */
 
 	int exit_status;   /* for exit(), wait()*/
-	int wait_call_count; 
+	// int wait_call_count; 
 	/*-----------------File System Call --------------------*/
 	struct file **fdt; /* Pointer to File Descriptor Table*/
 	int next_fd; /* Index for open spot in FDT */
