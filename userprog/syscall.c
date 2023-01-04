@@ -138,17 +138,17 @@ void syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_TELL:
 			f->R.rax = tell(f->R.rdi);
 			break;
-		//
+		// 부모가 자식을 기다려야 할때 대기시키는 함수
 		case SYS_WAIT:
 			f->R.rax = wait(f->R.rdi);
 			break;
-		//
+		// 현재 프로세스의 자리를 새로운 프로세스에게 양도?
 		case SYS_EXEC:
 			if (exec(f->R.rdi) == -1){
 				exit(-1);
 			}
 			break;
-		//
+		// 자식 프로세스 생성
 		case SYS_FORK:
 			f->R.rax = fork(f->R.rdi, f);
 			break;

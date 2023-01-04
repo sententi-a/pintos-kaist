@@ -100,7 +100,6 @@ tid_t process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	struct thread *child = get_child_pid(tid);
 	sema_down(&child->fork_sema);
 
-	//수정사항입니다 
 	if (child->exit_status == -1) {
 		return -1;
 	}
@@ -208,6 +207,9 @@ __do_fork (void *aux) {
 		}
 		current->file_dt[i] = cp_file;
 	}
+	// fork()를 통해 만들어진 프로세스의 실행 파일참조 멤버를 부모의 실행파일을 복제한 것과 매핑한다.
+	// current->running = file_duplicate(parent ->running);
+	// file_allow_write(current->running);
 
 	current->fdidx = parent->fdidx;
 	sema_up(&current->fork_sema);
@@ -237,7 +239,7 @@ int process_exec (void *f_name) {
 	bool success;
 
 	// Commend Line Parsing -------------------------------------------------------------
-	// char *copy_name[128];
+	// char *copy_name;
 	// memcpy(copy_name, file_name, strlen(file_name) + 1); // +1 해주는 이유는 문자열의 마지막에 '\n'값도 포함해주어야 해서
 	// Commend Line Parsing -------------------------------------------------------------
 
@@ -271,19 +273,20 @@ int process_exec (void *f_name) {
 		token_list[count] = token;
 	}
 	/* And then load the binary */
-	// 새로운 실행 파일의 정보를 프로세스(레지스터)에 로드 시킨다?
+	// load를 실패했다면 새로운 실행 파일의 정보를 프로세스(레지스터)에 로드 시킨다?
 	success = load(tmp_save, &_if);
 
 	// Commend Line Parsing -------------------------------------------------------------
 
 	/* If load failed, quit. */
 	// 현재 돌아가는 프로세스에 할당된 메모리 반환
+
 	if (!success){
-		palloc_free_page (file_name);
 		return -1;
 	}
-
 	argument_stack(token_list, count, &_if); // 스택에 인자를 넣어주는 함수
+
+	palloc_free_page (file_name);
 	//hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 프로그램의 스택 메모리 출력 함수
 
 	/* Start switched process. */
